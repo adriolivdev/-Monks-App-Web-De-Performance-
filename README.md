@@ -45,7 +45,6 @@ A aplicação foi organizada em **3 camadas principais**, separando responsabili
 
 ### 🔗 Diagrama Simplificado da Arquitetura  
 
-```plaintext
 Usuário
    │
    ▼
