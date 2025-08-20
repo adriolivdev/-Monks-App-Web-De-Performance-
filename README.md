@@ -44,7 +44,7 @@ A aplicação foi organizada em **3 camadas principais**, separando responsabili
 ### 🔎 Diagrama da Arquitetura  
 
 ### 🔗 Diagrama Simplificado da Arquitetura  
-
+```plaintext
 Usuário
    │
    ▼
@@ -58,7 +58,7 @@ Backend (Flask API)
    │   - user não vê
    ▼
 Arquivos CSV (users.csv / metrics.csv)
-
+ ````
 ---
 
 ## ✅ Requisitos atendidos
