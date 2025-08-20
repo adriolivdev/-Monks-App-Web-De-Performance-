@@ -1,9 +1,8 @@
-echo ".venv/
+
+.venv/
 __pycache__/
 *.pyc
-.env
-data/metrics.db
-data/__upload_*.csv
+*.log
 data/metrics.csv
-.DS_Store" > .gitignore
-git add .gitignore
+data/metrics.db
+

@@ -1,7 +1,13 @@
 # backend/app.py
 # -----------------------------------------------------------------------------
-# API Flask: login/logout/me, dados paginados + totais, export CSV, date-range,
-# autocomplete e import CSV. Novo: /api/compare para comparação de períodos.
+# API Flask (CORS + Compress)
+# - login/logout/me
+# - /api/data (paginado + totais)
+# - /api/export (CSV do filtro atual)
+# - /api/date-range
+# - /api/options (autocomplete)
+# - /api/compare (períodos A x B)
+# - /api/import-start, /api/import, /api/import-progress (progresso de import)
 # -----------------------------------------------------------------------------
 
 from flask import Flask, request, jsonify, session, send_from_directory, Response
@@ -11,17 +17,12 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import os
 import uuid
+from threading import Lock
 
 from auth import authenticate, get_current_user, logout_user
 from data_loader import (
-    load_users,
-    query_metrics_sql,
-    stream_export_csv,
-    get_date_bounds,
-    import_csv_file,
-    METRICS_CSV,
-    get_distinct_values,
-    compute_totals,  # <-- novo
+    load_users, query_metrics_sql, stream_export_csv, get_date_bounds,
+    import_csv_file, METRICS_CSV, get_distinct_values, compute_totals
 )
 
 app = Flask(
@@ -32,6 +33,20 @@ app = Flask(
 CORS(app, supports_credentials=True)
 Compress(app)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key-change-me")
+
+# -------- progresso em memória (simples) --------
+IMPORT_PROGRESS = {}
+IMPORT_LOCK = Lock()
+
+def set_progress(job_id: str, stage: str, pct: int | None = None, message: str | None = None):
+    with IMPORT_LOCK:
+        cur = IMPORT_PROGRESS.get(job_id, {})
+        cur["stage"] = stage
+        if pct is not None:
+            cur["pct"] = int(max(0, min(100, pct)))
+        if message is not None:
+            cur["message"] = message
+        IMPORT_PROGRESS[job_id] = cur
 
 # ---------------- AUTH ----------------
 
@@ -78,23 +93,16 @@ def data():
         include_cost = (user.get("role") == "admin")
 
         rows, total, totals = query_metrics_sql(
-            date_from=date_from,
-            date_to=date_to,
-            account_id=account_id,
-            campaign_id=campaign_id,
-            sort_by=sort_by,
-            sort_dir=sort_dir,
-            page=page,
-            page_size=page_size,
+            date_from=date_from, date_to=date_to,
+            account_id=account_id, campaign_id=campaign_id,
+            sort_by=sort_by, sort_dir=sort_dir,
+            page=page, page_size=page_size,
             include_cost=include_cost,
         )
 
         return jsonify({
-            "rows": rows,
-            "page": page,
-            "page_size": page_size,
-            "total": int(total),
-            "totals": totals
+            "rows": rows, "page": page, "page_size": page_size,
+            "total": int(total), "totals": totals
         }), 200
 
     except Exception as e:
@@ -139,16 +147,9 @@ def options():
     vals = get_distinct_values(field, q, limit)
     return jsonify({"values": vals}), 200
 
-# ---- NOVO: COMPARAÇÃO DE PERÍODOS ----
+# ---- comparação de períodos ----
 @app.route("/api/compare", methods=["GET"])
 def compare():
-    """
-    Compara dois períodos (A x B) e retorna:
-      - total_a, total_b
-      - diff_abs (B - A)
-      - diff_pct (variação % em relação a A)
-    Respeita account_id/campaign_id e RBAC (cost_micros só para admin).
-    """
     user = get_current_user(session)
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
@@ -168,25 +169,42 @@ def compare():
 
         diff_abs = {}
         diff_pct = {}
-        keys = total_a.keys()
-        for k in keys:
+        for k in total_a.keys():
             da = float(total_a.get(k, 0.0))
             db = float(total_b.get(k, 0.0))
             diff_abs[k] = db - da
             diff_pct[k] = None if da == 0 else ((db - da) / da) * 100.0
 
-        return jsonify({
-            "total_a": total_a,
-            "total_b": total_b,
-            "diff_abs": diff_abs,
-            "diff_pct": diff_pct
-        }), 200
-
+        return jsonify({"total_a": total_a, "total_b": total_b,
+                        "diff_abs": diff_abs, "diff_pct": diff_pct}), 200
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
-# ---------------- IMPORT ----------------
+# ---------------- IMPORT (com progresso) ----------------
+
+@app.route("/api/import-start", methods=["POST"])
+def import_start():
+    user = get_current_user(session)
+    if not user:
+        return jsonify({"error": "Não autenticado"}), 401
+    if user.get("role") != "admin":
+        return jsonify({"error": "Acesso negado (apenas admin)"}), 403
+
+    job_id = uuid.uuid4().hex
+    set_progress(job_id, "ready", 0, "Aguardando upload")
+    return jsonify({"job_id": job_id}), 200
+
+@app.route("/api/import-progress", methods=["GET"])
+def import_progress():
+    user = get_current_user(session)
+    if not user:
+        return jsonify({"error": "Não autenticado"}), 401
+    job_id = request.args.get("job_id")
+    if not job_id:
+        return jsonify({"error": "job_id é obrigatório"}), 400
+    with IMPORT_LOCK:
+        return jsonify(IMPORT_PROGRESS.get(job_id, {"stage": "unknown", "pct": 0})), 200
 
 @app.route("/api/import", methods=["POST"])
 def import_metrics():
@@ -194,29 +212,42 @@ def import_metrics():
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
     if user.get("role") != "admin":
-        return jsonify({"error": "Acesso negado (apenas admin pode importar)"}), 403
+        return jsonify({"error": "Acesso negado (apenas admin)"}), 403
+
+    job_id = request.args.get("job_id") or request.form.get("job_id") or uuid.uuid4().hex
+    set_progress(job_id, "uploading", 0, "Recebendo arquivo")
 
     if "file" not in request.files:
+        set_progress(job_id, "error", 0, "Arquivo ausente (campo 'file')")
         return jsonify({"error": "Envie um arquivo em form-data com campo 'file'"}), 400
 
     f = request.files["file"]
     if not f.filename.lower().endswith(".csv"):
+        set_progress(job_id, "error", 0, "Apenas .csv é aceito")
         return jsonify({"error": "Apenas .csv é aceito"}), 400
 
     filename = secure_filename(f.filename) or f"metrics_{uuid.uuid4().hex}.csv"
     os.makedirs(os.path.dirname(METRICS_CSV), exist_ok=True)
     temp_path = os.path.join(os.path.dirname(METRICS_CSV), f"__upload_{uuid.uuid4().hex}.csv")
+
     f.save(temp_path)
+    set_progress(job_id, "importing", 0, "Importando CSV")
 
     try:
-        imported_rows = import_csv_file(temp_path)
+        def _cb(stage: str, pct: int, message: str | None = None):
+            set_progress(job_id, stage, pct, message)
+
+        imported_rows = import_csv_file(temp_path, progress_cb=_cb)
         os.replace(temp_path, METRICS_CSV)
+        set_progress(job_id, "finalizing", 100, "Finalizando")
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        set_progress(job_id, "error", 0, str(e))
         return jsonify({"error": f"Falha ao importar CSV: {e}"}), 400
 
-    return jsonify({"ok": True, "message": f"Importação concluída ({imported_rows} linhas)."}), 200
+    set_progress(job_id, "done", 100, f"Importação concluída ({imported_rows} linhas)")
+    return jsonify({"ok": True, "message": f"Importação concluída ({imported_rows} linhas).", "job_id": job_id}), 200
 
 # ---------------- FRONT ----------------
 

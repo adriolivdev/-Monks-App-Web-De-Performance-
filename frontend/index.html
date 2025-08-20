@@ -9,10 +9,11 @@
 </head>
 <body>
   <main class="container">
-    <!-- LOGIN -->
+    <!-- ========================= LOGIN ========================= -->
     <section id="login-view" class="card">
       <h1 class="brand">Portal de Performance</h1>
       <p class="muted">Acesse com seu e-mail (username) e senha</p>
+
       <form id="login-form" class="form">
         <label for="email">E-mail</label>
         <input id="email" type="text" placeholder="user1" required />
@@ -21,6 +22,7 @@
         <div class="row gap"><button type="submit" class="btn primary">Entrar</button></div>
         <div id="login-error" class="error" role="alert"></div>
       </form>
+
       <details class="muted">
         <summary>Credenciais de exemplo</summary>
         <pre>user1 / oeiIuhn56146 (admin)
@@ -28,7 +30,7 @@ user2 / 908ij0fff (user)</pre>
       </details>
     </section>
 
-    <!-- APP -->
+    <!-- ========================== APP ========================= -->
     <section id="app-view" class="card hidden">
       <header class="toolbar">
         <div class="toolbar-left">
@@ -38,6 +40,7 @@ user2 / 908ij0fff (user)</pre>
             <strong>Papel:</strong> <span id="me-role"></span>
           </div>
         </div>
+
         <div class="toolbar-right">
           <label class="upload btn linklike">
             <input id="csv-file" type="file" accept=".csv" hidden />
@@ -48,7 +51,7 @@ user2 / 908ij0fff (user)</pre>
         </div>
       </header>
 
-      <!-- FILTROS -->
+      <!-- ====== FILTROS ====== -->
       <section class="filters">
         <div class="chipbar" aria-label="Atalhos de período">
           <button class="chip" data-range="all">Tudo</button>
@@ -62,11 +65,11 @@ user2 / 908ij0fff (user)</pre>
         <div class="grid g-4">
           <div class="field">
             <label for="date-from">Data inicial</label>
-            <input type="date" id="date-from" inputmode="numeric" placeholder="YYYY-MM-DD" />
+            <input type="date" id="date-from" inputmode="numeric" />
           </div>
           <div class="field">
             <label for="date-to">Data final</label>
-            <input type="date" id="date-to" inputmode="numeric" placeholder="YYYY-MM-DD" />
+            <input type="date" id="date-to" inputmode="numeric" />
           </div>
           <div class="field">
             <label for="page-size">Itens por página</label>
@@ -96,7 +99,7 @@ user2 / 908ij0fff (user)</pre>
         </div>
       </section>
 
-      <!-- NOVO: COMPARAÇÃO DE PERÍODOS -->
+      <!-- ====== COMPARAÇÃO ====== -->
       <section class="filters">
         <details class="advanced" open>
           <summary>Comparar períodos</summary>
@@ -120,13 +123,13 @@ user2 / 908ij0fff (user)</pre>
           </div>
           <div class="row gap" style="margin-top:8px;">
             <button id="compare-btn" class="btn">Comparar</button>
+            <button id="clear-compare" class="btn ghost">Limpar comparação</button>
           </div>
-
           <div id="compare-result" class="compare-result" style="margin-top:10px;"></div>
         </details>
       </section>
 
-      <!-- TABELA -->
+      <!-- ====== TABELA ====== -->
       <section class="table-wrap">
         <table id="data-table" class="table">
           <thead id="table-head"></thead>
@@ -135,7 +138,7 @@ user2 / 908ij0fff (user)</pre>
         </table>
       </section>
 
-      <!-- PAGINAÇÃO -->
+      <!-- ====== PAGINAÇÃO ====== -->
       <footer class="pager">
         <button id="prev-page" class="btn">Anterior</button>
         <span id="page-info" class="muted" aria-live="polite"></span>
@@ -144,10 +147,15 @@ user2 / 908ij0fff (user)</pre>
     </section>
   </main>
 
-  <!-- loading & toast -->
-  <div id="loading-overlay" class="loading hidden" aria-hidden="true">
-    <div class="spinner" aria-label="Carregando"></div>
+  <!-- overlay exclusivo da importação -->
+  <div id="import-overlay" class="loading hidden" aria-hidden="true">
+    <div class="box">
+      <div class="spinner" aria-label="Carregando"></div>
+      <div id="progress-text" class="progress-text">Processando…</div>
+      <div class="progress"><div id="progress-bar" class="bar"></div></div>
+    </div>
   </div>
+
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="/app.js"></script>

@@ -1,204 +1,178 @@
-# 📄 Case – Aplicação de Performance (MVP)
+# Portal de Performance — Case Estágio Eng. de Software
 
-Esse README mostra o que foi feito, como rodar e como pensar grande depois do MVP.
+Aplicação web para gestores de Marketing Digital visualizarem métricas de várias contas.  
+**Stack:** Frontend (HTML/CSS/JS puros) · API em **Python/Flask** · Persistência em **SQLite** (gerada a partir do CSV).
 
-## 🚀 Sobre o projeto
-Este projeto é um **MVP** de uma aplicação web para gestores de uma agência de marketing digital.  
-Ele permite:  
-- Login por e-mail e senha  
-- Visualizar dados de performance em tabela  
-- Filtrar por intervalo de datas  
-- Ordenar por qualquer coluna  
-- Exibir a coluna `cost_micros` apenas para usuários com papel **admin**  
-
-## 🏗️ Arquitetura  
-
-A aplicação foi organizada em **3 camadas principais**, separando responsabilidades de forma clara:  
-
-- **Frontend (Camada de Apresentação):**  
-  Construído em **HTML, CSS e JavaScript puro**, garantindo simplicidade no MVP.  
-  - Exibe os dados em formato de tabela.  
-  - Permite filtros por data e ordenação de colunas.  
-  - Controla a experiência do usuário (UX).  
-  - Futuramente pode ser migrado para um framework moderno como **React, Vue.js ou Angular**.  
-
-- **Backend (Camada de Lógica / API):**  
-  Desenvolvido em **Python (Flask)**.  
-  - Fornece rotas para login e acesso aos dados.  
-  - Aplica regras de negócio (ex.: esconder a coluna `cost_micros` para usuários não-admin).  
-  - Garante segurança com autenticação via email e senha.  
-  - Organização modular:  
-    - `app.py` → ponto de entrada da API.  
-    - `auth.py` → autenticação e controle de acesso.  
-    - `data_loader.py` → carregamento e tratamento dos CSVs.  
-    - `utils.py` → funções auxiliares.  
-
-- **Dados (Camada de Persistência):**  
-  Utiliza **arquivos CSV** como fonte de dados inicial:  
-  - `users.csv` → armazena usuários e papéis (admin ou user).  
-  - `metrics.csv` → contém as métricas de performance das contas da agência.  
-  - Esses arquivos podem futuramente ser substituídos por um banco de dados (ex.: PostgreSQL).  
+![Login](docs/img/01-login.png)
 
 ---
 
-### 🔎 Diagrama da Arquitetura  
+## 🔎 Visão Geral
 
-### 🔗 Diagrama Simplificado da Arquitetura  
+- **Login por e-mail/username e senha** (lido de `data/users.csv`).
+- **Tabela** com paginação, **ordenação por qualquer coluna** e **totais no rodapé**.
+- **Filtros** por data + atalhos (Hoje, Últimos 7/30 dias, Este mês, Mês passado) e por **Account/Campaign ID** (autocomplete).
+- **RBAC**: a coluna **`cost_micros`** só aparece para **admin** (e entra no export/total apenas para admin).
+- **Importar CSV** com **barra de progresso** (upload + processamento em chunks).
+- **Exportar CSV** do filtro atual.
+- **Comparar Períodos (A × B)** com deltas absolutos e percentuais.
+
+![Dashboard](docs/img/03-dashboard.png)
+
+---
+
+## ✅ Conformidade com o Case
+
+- **Frontend exibindo dados**: ✅ Tabela paginada com ordenação e filtros.
+- **API servindo dados**: ✅ Flask + endpoints REST.
+- **Login por e-mail/senha**: ✅ via `users.csv` (username/email + password + role).
+- **Filtrar por data**: ✅ campos de data e chips rápidos.
+![filtros](docs/img/02-filtros.png)
+![comparar](docs/img/04-comparar.png)
+![total](docs/img/05-total.png)
+![progresso](docs/img/06-progresso.png)
+- **Ordenar por qualquer coluna**: ✅ click no header (ASC/DESC).
+- **`cost_micros` só para admin**: ✅ RBAC no servidor (dados não são enviados para “user”).
+- **API em Python**: ✅ Flask + pandas + SQLite.
+
+> Não requisitos: cadastro de usuário (não implementado, usei `users.csv`), frameworks no front (optamos por JS puro), UX/UI não avaliada (mas entreguei responsivo e legível).
+
+---
+
+## 🧱 Arquitetura
 ```plaintext
-Usuário
-   │
-   ▼
-Frontend (HTML, CSS, JS)
-   │  solicita dados
-   ▼
-Backend (Flask API)
-   │  regras de negócio:
-   │   - login (email/senha)
-   │   - admin vê "cost_micros"
-   │   - user não vê
-   ▼
-Arquivos CSV (users.csv / metrics.csv)
- ````
----
+├── backend/
+│   ├── __init__.py
+│   ├── app.py
+│   ├── auth.py
+│   ├── data_loader.py
+│   ├── import_csv_to_sqlite.py
+│   └── utils.py
+├── data/
+│   ├── metrics.csv         # NÃO versionar
+│   ├── metrics.db          # NÃO versionar
+│   └── users.csv
+├── docs/
+│   └── img/
+│       ├── 01-login.png
+│       ├── 02-filtros.png
+│       ├── 03-dashboard.png
+│       ├── 04-comparacao.png
+│       ├── 05-total.png
+│       └── 06-progress.png
+├── frontend/
+│   ├── app.js
+│   ├── index.html
+│   └── styles.css
+├── .gitignore
+├── README.md
+└── requirements.txt
+```
 
-## ✅ Requisitos atendidos
-- Login e logout de usuários  
-- Sessão simples para manter usuário logado  
-- Filtro por data  
-- Ordenação clicando nos cabeçalhos da tabela  
-- RBAC: regra de acesso no **backend** (não-admin não recebe a coluna `cost_micros`)  
-- API escrita em **Python**  
-## 📋 Requisitos
+Arquitetura (em 3 camadas)
+[Frontend HTML/CSS/JS]
+   - Tabela + filtros + ordenação + paginação
+   - Importa CSV (upload com progresso) / Exporta CSV
+   - Comparação de períodos (A × B)
+           |
+           v
+[API Flask (Python)]
+   - Auth (sessão com cookie)
+   - /api/data, /api/export, /api/import*, /api/compare, /api/date-range, /api/options
+   - Regras de negócio + RBAC (admin vs user)
+           |
+           v
+[Dados: CSV -> SQLite]
+   - Importo metrics.csv em chunks p/ tabela `metrics`
+   - Índices: date, account_id, campaign_id
+   - Export em streaming
 
-### Funcionais (RF)
-- RF-01: Login por e-mail e senha
-- RF-02: Exibir dados em tabela
-- RF-03: Filtrar dados por data
-- RF-04: Ordenar por qualquer coluna
-- RF-05: Exibir `cost_micros` somente para admin
-
-### Não Funcionais (RNF)
-- RNF-01: API escrita em Python
-- RNF-02: Regras de acesso aplicadas no backend
-- RNF-03: Dados lidos de arquivos CSV
-- RNF-04: Documentação para execução do projeto
-
----
-
-## 📂 Estrutura do projeto
-.monks/
-.monks/
-
-│── backend/
-
-│   ├── app.py          # API principal em Flask
-
-│   ├── auth.py         # lógica de login
-
-│   ├── data_loader.py  # leitura dos CSV
-
-│   ├── utils.py        # funções auxiliares
-
-│── frontend/
-
-│   ├── index.html      # página inicial
-
-│   ├── app.js       # lógica de frontend
-
-│   ├── style.css       # estilos
-
-│── data/
-
-│   ├── users.csv       # usuários do sistema
-
-│   ├── performance.csv # métricas da agência
-
-│── requirements.txt
-
-│── README.md
-
+**Decisões chave**
+- **SQLite** com índices por `date`, `account_id`, `campaign_id` → consultas rápidas.
+- **Ingestão em chunks** para CSVs grandes; limita variáveis do SQLite para evitar “too many SQL variables”.
+- **RBAC no servidor**: segurança por omissão (coluna nem é selecionada para user).
+- **Compress + CORS** no Flask para perf/integração.
 
 ---
-## 🔧 Como rodar localmente
 
-### 1. Pré-requisitos
-- Python 3.10+  
-- pip  
-
-### 2. Instalar dependências
+## ▶️ Como rodar
+Requisitos: Python 3.10+ e pip instalados
+Eu usei Windows (Git Bash) durante o desenvolvimento.
 ```bash
-cd marketing_case
+# 1) criar venv + instalar deps
 python -m venv .venv
-# Windows: .venv\Scripts\activate
-# Linux/Mac:
-source .venv/bin/activate
-pip install flask flask-cors pandas
+source .venv/Scripts/activate  # (Windows Git Bash)
+pip install -r requirements.txt
 
+# 2) iniciar API
+python backend/app.py
+# abre http://127.0.0.1:8000
 
-3. Rodar o servidor
-python app.py
+```
+Credenciais de exemplo
 
+user1 / oeiIuhn56146  (role: admin)
+user2 / 908ij0fff     (role: user)
 
-A aplicação estará disponível em:
-👉 http://localhost:8000
+----
+### Como usar (fluxo funcional)
 
-🔑 Usuários de teste
+Login → sessão criada por cookie.
 
-Arquivo data/users.csv contém usuários de exemplo:
+A app carrega /api/date-range e pré-preenche as datas com min/max disponíveis.
 
-email	senha	role
-user1	oeiIuhn56146	admin
-user2	908ij0fff	user
+Tabela: filtro por data, account/campaign (autocomplete), paginação e ordenação por qualquer coluna.
 
-Logando como user1 (admin) → a tabela mostra cost_micros.
+Totais no rodapé para o recorte atual (e em BRL para cost_micros quando admin).
 
-Logando como user2 (user) → essa coluna não aparece.
+Comparar períodos A×B: eu informo faixas ou deixo o app sugerir B e preencher A com janela equivalente; vejo Δ e Δ%.
 
-📡 Endpoints da API
-POST /api/login
+Importar CSV: overlay exibe “Enviando…” → “Importando…” → “Finalizando…”; no fim, a tabela recarrega e aparece um toast de sucesso.
 
-Body:
+Exportar CSV: baixa o recorte atual, respeitando RBAC.
+----
 
-{ "email": "user1", "password": "oeiIuhn56146" }
+### Performance & Segurança (o que eu fiz)
 
+Ingestão em chunks (pandas) para lidar com CSVs grandes sem estourar memória.
 
-Resposta:
+Limite do SQLite: quebro inserts para evitar “too many SQL variables”.
 
-{ "ok": true, "user": { "email": "user1", "role": "admin" } }
+Índices por date, account_id, campaign_id aceleram filtros e ordenação.
 
-GET /api/me
+Paginação + ordenação server-side → payload pequeno, rápido no cliente.
 
-Retorna usuário atual.
+RBAC no backend: cost_micros só vai para admin (não aparece no JSON para user).
 
-POST /api/logout
+Compress + CORS: respostas menores; integração suave em ambiente local.
+----
 
-Encerra sessão.
+### Troubleshooting (erros clássicos que eu tratei)
 
-GET /api/data?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD&sort_by=col&sort_dir=asc|desc
+Nada aparece ao aplicar filtros de data
+→ Verifique se as datas existem no CSV (use os atalhos de período ou deixe a app carregar min/max por /api/date-range).
 
-Retorna dados filtrados e ordenados.
+sqlite3.OperationalError: too many SQL variables
+→ Resolvi limitando o tamanho do insert em data_loader.py (cálculo com SQLITE_MAX_VARS e rows_per_insert).
 
-Se role=user, a coluna cost_micros não é enviada.
+Pandas pedindo build tools no Windows
+→ Usei versões estáveis no requirements.txt. Se usar Python novo, garanta pip atualizado (python -m pip install -U pip).
 
-🌱 Evoluções futuras
+Git bloqueando push (arquivo grande)
+→ Não versione data/metrics.csv e data/metrics.db. Veja .gitignore abaixo.
+----
+### Roadmap & Limitações (o que eu faria depois)
 
-Se fosse evoluir este MVP para produção, os próximos passos seriam:
+Cadastro/gestão de usuários, troca de senha, esqueceu a senha.
 
-Substituir CSV por PostgreSQL
+Permissões granulares além de admin/user.
 
-Migrar de Flask para FastAPI (mais moderno e escalável)
+Testes automatizados (unitários e integração).
 
-Usar JWT para autenticação
+Dockerfile/Compose.
 
-Implementar paginação e exportação de CSV
+Gráficos e insights (CTR, CPA, CPC, etc.).
 
-Criar testes automáticos (pytest)
+Cache incremental para reimportações.
 
-Dockerizar a aplicação para rodar em qualquer ambiente
-
-## 🌟 Conclusão
-
-Este projeto foi desenvolvido como um MVP de estudo e demonstração prática de Engenharia de Software.
-Mesmo sendo simples, ele já aplica conceitos importantes como separação de camadas, regras de negócio no backend e controle de acesso baseado em papéis.
-
-O objetivo não é só atender os requisitos, mas também mostrar como a solução pode evoluir para produção: trocar CSV por banco de dados, adotar FastAPI, JWT, testes automatizados e deploy em containers futuramente.
+Internacionalização (i18n) e acessibilidade avançada (a11y).

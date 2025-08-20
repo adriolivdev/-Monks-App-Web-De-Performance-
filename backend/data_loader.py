@@ -1,14 +1,19 @@
 # backend/data_loader.py
 # -----------------------------------------------------------------------------
-# Camada de dados: schema/índices, import de CSV em lotes, consultas paginadas,
-# totais, export em streaming, bounds de data, autocomplete e usuários.
-# Agora inclui compute_totals() para a comparação de períodos.
+# Camada de dados:
+# - Schema/índices (SQLite)
+# - Importação de CSV em lotes (chunks) com callback de progresso
+# - Consulta paginada + totais (para rodapé)
+# - Exportação em streaming (respeitando RBAC)
+# - Bounds de data (min/max)
+# - Autocomplete (account_id / campaign_id)
+# - Totais agregados para comparação de períodos
 # -----------------------------------------------------------------------------
 
 import os
 import sqlite3
 import pandas as pd
-from typing import Optional, Tuple, List, Dict, Any, Iterator
+from typing import Optional, Tuple, List, Dict, Any, Iterator, Callable
 import csv
 from io import StringIO
 
@@ -20,7 +25,7 @@ USERS_CSV   = os.path.join(DATA_DIR, "users.csv")
 METRICS_CSV = os.path.join(DATA_DIR, "metrics.csv")
 DB_PATH     = os.path.join(DATA_DIR, "metrics.db")
 
-# Colunas permitidas para ORDER BY (sanitização de sort)
+# Colunas permitidas para ORDER BY (sanitização)
 ALLOWED_SORT = {
     "account_id","campaign_id","cost_micros",
     "clicks","conversions","impressions","interactions","date",
@@ -47,7 +52,24 @@ def create_schema(conn: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_metrics_cmp  ON metrics(campaign_id);")
     conn.commit()
 
-def import_csv_chunks(conn: sqlite3.Connection, csv_path: str, read_chunksize: int = 200_000) -> int:
+# ---------- util: contar linhas p/ estimar % ----------
+
+def count_csv_rows(csv_path: str) -> int:
+    total_lines = 0
+    with open(csv_path, "rb") as f:
+        for block in iter(lambda: f.read(1024 * 1024), b""):
+            total_lines += block.count(b"\n")
+    return max(0, total_lines - 1)  # desconta cabeçalho
+
+# ----------- IMPORTAÇÃO EM CHUNKS (com progresso) -----------
+
+def import_csv_chunks(
+    conn: sqlite3.Connection,
+    csv_path: str,
+    read_chunksize: int = 200_000,
+    total_rows: Optional[int] = None,
+    progress_cb: Optional[Callable[[str, int, Optional[str]], None]] = None,
+) -> int:
     if not os.path.exists(csv_path):
         raise FileNotFoundError(f"CSV não encontrado: {csv_path}")
 
@@ -55,6 +77,8 @@ def import_csv_chunks(conn: sqlite3.Connection, csv_path: str, read_chunksize: i
     conn.commit()
 
     total = 0
+    imported = 0
+
     for chunk in pd.read_csv(
         csv_path,
         dtype={"account_id": str, "campaign_id": str},
@@ -78,18 +102,33 @@ def import_csv_chunks(conn: sqlite3.Connection, csv_path: str, read_chunksize: i
             method="multi",
             chunksize=rows_per_insert
         )
-        total += len(chunk)
+
+        imported += len(chunk)
+        total    += len(chunk)
+
+        if progress_cb and total_rows and total_rows > 0:
+            pct = min(99, int(imported / total_rows * 100))
+            progress_cb("importing", pct, f"{imported}/{total_rows}")
 
     conn.execute("ANALYZE;")
     conn.commit()
+
+    if progress_cb:
+        progress_cb("importing", 100, "done")
+
     return total
 
-def import_csv_file(csv_path: str) -> int:
+def import_csv_file(
+    csv_path: str,
+    progress_cb: Optional[Callable[[str, int, Optional[str]], None]] = None
+) -> int:
     os.makedirs(DATA_DIR, exist_ok=True)
+    total_rows = count_csv_rows(csv_path)
+
     conn = sqlite3.connect(DB_PATH)
     try:
         create_schema(conn)
-        return import_csv_chunks(conn, csv_path)
+        return import_csv_chunks(conn, csv_path, total_rows=total_rows, progress_cb=progress_cb)
     finally:
         conn.close()
 
@@ -126,7 +165,7 @@ def load_users() -> Dict[str, Dict[str, str]]:
         }
     return users
 
-# ----------- HELPERS DE WHERE -----------
+# ----------- WHERE dinâmico -----------
 
 def _build_where(date_from, date_to, account_id, campaign_id):
     where = []
@@ -146,7 +185,7 @@ def _build_where(date_from, date_to, account_id, campaign_id):
     where_clause = f"WHERE {' AND '.join(where)}" if where else ""
     return where_clause, params
 
-# ----------- CONSULTA PAGINADA + TOTAIS -----------
+# ----------- Consulta paginada + totais -----------
 
 def query_metrics_sql(
     date_from: Optional[str],
@@ -243,7 +282,7 @@ def query_metrics_sql(
 
     return rows, int(total), totals
 
-# ----------- EXPORT STREAMING -----------
+# ----------- Export streaming -----------
 
 def _build_export_sql(date_from, date_to, account_id, campaign_id, sort_by, sort_dir, include_cost):
     sort_by  = sort_by if sort_by in ALLOWED_SORT else "date"
@@ -286,7 +325,7 @@ def stream_export_csv(date_from, date_to, account_id, campaign_id, sort_by, sort
     finally:
         conn.close()
 
-# ----------- BOUNDS & AUTOCOMPLETE -----------
+# ----------- Bounds & Autocomplete -----------
 
 def get_date_bounds() -> Dict[str, Optional[str]]:
     ensure_db_ready()
@@ -315,7 +354,7 @@ def get_distinct_values(column: str, q: str = "", limit: int = 100) -> List[str]
     finally:
         conn.close()
 
-# ----------- TOTAIS (para comparação de períodos) -----------
+# ----------- Totais para comparação -----------
 
 def compute_totals(
     date_from: Optional[str],
@@ -324,10 +363,6 @@ def compute_totals(
     campaign_id: Optional[str],
     include_cost: bool,
 ) -> Dict[str, float]:
-    """
-    Soma métricas no intervalo/escopo informado.
-    Respeita RBAC (include_cost).
-    """
     ensure_db_ready()
     where_clause, params = _build_where(date_from, date_to, account_id, campaign_id)
 
