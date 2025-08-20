@@ -176,3 +176,6 @@ Gráficos e insights (CTR, CPA, CPC, etc.).
 Cache incremental para reimportações.
 
 Internacionalização (i18n) e acessibilidade avançada (a11y).
+Licença
+
+### Uso educacional do case. Fique à vontade para adaptar.!
