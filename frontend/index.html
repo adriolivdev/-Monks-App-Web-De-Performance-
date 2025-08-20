@@ -1,25 +1,33 @@
+<!-- frontend/index.html -->
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Portal de Performance</title>
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
   <main class="container">
-    <!-- LOGIN -->
+    <!-- ========================= LOGIN ========================= -->
     <section id="login-view" class="card">
-      <h1>Portal de Performance</h1>
+      <h1 class="brand">Portal de Performance</h1>
       <p class="muted">Acesse com seu e-mail (username) e senha</p>
-      <form id="login-form">
-        <label>E-mail</</label>
+
+      <form id="login-form" class="form">
+        <label for="email">E-mail</label>
         <input id="email" type="text" placeholder="user1" required />
-        <label>Senha</label>
+
+        <label for="password">Senha</label>
         <input id="password" type="password" placeholder="••••••••" required />
-        <button type="submit">Entrar</button>
-        <div id="login-error" class="error"></div>
+
+        <div class="row gap">
+          <button type="submit" class="btn primary">Entrar</button>
+        </div>
+
+        <div id="login-error" class="error" role="alert"></div>
       </form>
+
       <details class="muted">
         <summary>Credenciais de exemplo</summary>
         <pre>user1 / oeiIuhn56146 (admin)
@@ -27,56 +35,102 @@ user2 / 908ij0fff (user)</pre>
       </details>
     </section>
 
-    <!-- APP -->
+    <!-- ========================== APP ========================= -->
     <section id="app-view" class="card hidden">
-      <header class="bar">
-        <div>
-          <strong>Usuário:</strong> <span id="me-name"></span> · 
-          <strong>Papel:</strong> <span id="me-role"></span>
+      <header class="toolbar">
+        <div class="toolbar-left">
+          <h2 class="brand sm">Portal de Performance</h2>
+          <div class="who">
+            <strong>Usuário:</strong> <span id="me-name"></span> ·
+            <strong>Papel:</strong> <span id="me-role"></span>
+          </div>
         </div>
-        <div class="bar-actions">
-          <label class="upload">
+
+        <div class="toolbar-right">
+          <label class="upload btn linklike">
             <input id="csv-file" type="file" accept=".csv" hidden />
-            <span class="link">Importar CSV</span>
+            Importar CSV
           </label>
-          <a id="export-csv" class="link" href="#" download>Exportar CSV</a>
-          <button id="logout">Sair</button>
+          <a id="export-csv" class="btn linklike" href="#" download>Exportar CSV</a>
+          <a class="btn linklike" href="/api/example-csv">CSV de exemplo</a>
+          <button id="logout" class="btn danger outline">Sair</button>
         </div>
       </header>
 
+      <!-- ====== FILTROS ====== -->
       <section class="filters">
-        <div>
-          <label>Data inicial</label>
-          <input type="date" id="date-from">
+        <!-- atalhos de período -->
+        <div class="chipbar" aria-label="Atalhos de período">
+          <button class="chip" data-range="all">Tudo</button>
+          <button class="chip" data-range="today">Hoje</button>
+          <button class="chip" data-range="7d">Últimos 7 dias</button>
+          <button class="chip" data-range="30d">Últimos 30 dias</button>
+          <button class="chip" data-range="thisMonth">Este mês</button>
+          <button class="chip" data-range="lastMonth">Mês passado</button>
         </div>
-        <div>
-          <label>Data final</label>
-          <input type="date" id="date-to">
+
+        <!-- grid de filtros principais -->
+        <div class="grid g-4">
+          <div class="field">
+            <label for="date-from">Data inicial</label>
+            <input type="date" id="date-from" inputmode="numeric" placeholder="YYYY-MM-DD" />
+          </div>
+          <div class="field">
+            <label for="date-to">Data final</label>
+            <input type="date" id="date-to" inputmode="numeric" placeholder="YYYY-MM-DD" />
+          </div>
+          <div class="field">
+            <label for="page-size">Itens por página</label>
+            <input type="number" id="page-size" min="1" max="200" value="50" />
+          </div>
         </div>
-        <div>
-          <label>Itens por página</label>
-          <input type="number" id="page-size" min="1" max="200" value="50">
-        </div>
-        <div class="actions">
-          <button id="apply-filters">Aplicar</button>
-          <button id="clear-filters">Limpar</button>
+
+        <!-- filtros avançados (colapsáveis no mobile) -->
+        <details class="advanced" open>
+          <summary>Filtros avançados</summary>
+          <div class="grid g-4">
+            <div class="field">
+              <label for="account-id">Account ID (contém)</label>
+              <input list="accounts" id="account-id" placeholder="ex: 8181" />
+              <datalist id="accounts"></datalist>
+            </div>
+            <div class="field">
+              <label for="campaign-id">Campaign ID (contém)</label>
+              <input list="campaigns" id="campaign-id" placeholder="ex: 6320" />
+              <datalist id="campaigns"></datalist>
+            </div>
+          </div>
+        </details>
+
+        <div class="row gap">
+          <button id="apply-filters" class="btn primary">Aplicar</button>
+          <button id="clear-filters" class="btn ghost">Limpar</button>
         </div>
       </section>
 
-      <section>
-        <table id="data-table">
+      <!-- ====== TABELA (wrap com scroll horizontal) ====== -->
+      <section class="table-wrap">
+        <table id="data-table" class="table">
           <thead id="table-head"></thead>
           <tbody id="table-body"></tbody>
+          <tfoot id="table-foot"></tfoot>
         </table>
       </section>
 
+      <!-- ====== PAGINAÇÃO ====== -->
       <footer class="pager">
-        <button id="prev-page">Anterior</button>
-        <span id="page-info" class="muted"></span>
-        <button id="next-page">Próxima</button>
+        <button id="prev-page" class="btn">Anterior</button>
+        <span id="page-info" class="muted" aria-live="polite"></span>
+        <button id="next-page" class="btn">Próxima</button>
       </footer>
     </section>
   </main>
+
+  <!-- overlay de loading e área de toast -->
+  <div id="loading-overlay" class="loading hidden" aria-hidden="true">
+    <div class="spinner" aria-label="Carregando"></div>
+  </div>
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
   <script src="/app.js"></script>
 </body>
