@@ -8,7 +8,7 @@ Aplicação web para gestores de Marketing Digital visualizarem métricas de vá
 ---
 
 ## 🔎 Visão Geral
-
+![Dashboard](docs/img/03-dashboard.png)
 - **Login por e-mail/username e senha** (lido de `data/users.csv`).
 - **Tabela** com paginação, **ordenação por qualquer coluna** e **totais no rodapé**.
 - **Filtros** por data + atalhos (Hoje, Últimos 7/30 dias, Este mês, Mês passado) e por **Account/Campaign ID** (autocomplete).
@@ -16,8 +16,7 @@ Aplicação web para gestores de Marketing Digital visualizarem métricas de vá
 - **Importar CSV** com **barra de progresso** (upload + processamento em chunks).
 - **Exportar CSV** do filtro atual.
 - **Comparar Períodos (A × B)** com deltas absolutos e percentuais.
-
-![Dashboard](docs/img/03-dashboard.png)
+![comparar](docs/img/04-comparar.png)
 
 ---
 
@@ -28,14 +27,13 @@ Aplicação web para gestores de Marketing Digital visualizarem métricas de vá
 - **Login por e-mail/senha**: ✅ via `users.csv` (username/email + password + role).
 - **Filtrar por data**: ✅ campos de data e chips rápidos.
 ![filtros](docs/img/02-filtros.png)
-![comparar](docs/img/04-comparar.png)
 ![total](docs/img/05-total.png)
 ![progresso](docs/img/06-progresso.png)
 - **Ordenar por qualquer coluna**: ✅ click no header (ASC/DESC).
 - **`cost_micros` só para admin**: ✅ RBAC no servidor (dados não são enviados para “user”).
 - **API em Python**: ✅ Flask + pandas + SQLite.
 
-> Não requisitos: cadastro de usuário (não implementado, usei `users.csv`), frameworks no front (optamos por JS puro), UX/UI não avaliada (mas entreguei responsivo e legível).
+> Não requisitos: cadastro de usuário (não implementado, usei `users.csv`), frameworks no front (optei por JS puro), UX/UI não avaliada (mas entreguei responsivo e legível).
 
 ---
 
@@ -128,8 +126,8 @@ Totais no rodapé para o recorte atual (e em BRL para cost_micros quando admin).
 Comparar períodos A×B: eu informo faixas ou deixo o app sugerir B e preencher A com janela equivalente; vejo Δ e Δ%.
 
 Importar CSV: overlay exibe “Enviando…” → “Importando…” → “Finalizando…”; no fim, a tabela recarrega e aparece um toast de sucesso.
-
 Exportar CSV: baixa o recorte atual, respeitando RBAC.
+
 ----
 
 ### Performance & Segurança (o que eu fiz)
@@ -143,8 +141,8 @@ Limite do SQLite: quebro inserts para evitar “too many SQL variables”.
 Paginação + ordenação server-side → payload pequeno, rápido no cliente.
 
 RBAC no backend: cost_micros só vai para admin (não aparece no JSON para user).
-
 Compress + CORS: respostas menores; integração suave em ambiente local.
+
 ----
 
 ### Troubleshooting (erros clássicos que eu tratei)
@@ -160,6 +158,7 @@ Pandas pedindo build tools no Windows
 
 Git bloqueando push (arquivo grande)
 → Não versione data/metrics.csv e data/metrics.db. Veja .gitignore abaixo.
+
 ----
 ### Roadmap & Limitações (o que eu faria depois)
 
@@ -178,4 +177,36 @@ Cache incremental para reimportações.
 Internacionalização (i18n) e acessibilidade avançada (a11y).
 Licença
 
-### Uso educacional do case. Fique à vontade para adaptar.!
+## Uso educacional do case. Fique à vontade para adaptar!
+
+## Glossário (siglas e termos usados nesse README)
+| Termo                         | Significado                                                | Por que aparece                                          |
+| ----------------------------- | ---------------------------------------------------------- | -------------------------------------------------------- |
+| **RBAC**                      | *Role-Based Access Control* (controle de acesso por papel) | Só **admin** vê `cost_micros`.                           |
+| **API**                       | Interface de Programação de Aplicativos                    | Camada backend que serve dados ao frontend.              |
+| **REST**                      | Estilo de arquitetura de APIs via HTTP (GET/POST/…)        | Padrão dos endpoints (`/api/data`, `/api/export`, etc.). |
+| **CSV**                       | *Comma-Separated Values* (arquivo tabular)                 | Formato das métricas e dos usuários.                     |
+| **SQLite**                    | Banco de dados leve em arquivo                             | Persistência local (`metrics.db`) gerada do CSV.         |
+| **pandas**                    | Biblioteca Python para dados                               | Leitura/normalização do CSV e ingestão em *chunks*.      |
+| **Flask**                     | Microframework web em Python                               | Framework usado para a API.                              |
+| **CORS**                      | *Cross-Origin Resource Sharing*                            | Permite o front acessar a API no dev.                    |
+| **Compress**                  | Compressão HTTP (gzip/br)                                  | Respostas menores/mais rápidas.                          |
+| **JSON**                      | Formato de dados textual                                   | Corpo e resposta das requisições da API.                 |
+| **SPA**                       | *Single-Page Application*                                  | Front em JS puro numa página única.                      |
+| **MVP**                       | *Minimum Viable Product*                                   | Entrega enxuta focada nos requisitos.                    |
+| **RBAC no servidor**          | RBAC implementado na API                                   | Segurança por omissão (coluna não enviada para *user*).  |
+| **client-side / server-side** | No cliente / no servidor                                   | Ordenação e paginação são **server-side**.               |
+| **ASC / DESC**                | *Ascending* / *Descending*                                 | Direção da ordenação por coluna.                         |
+| **LIKE**                      | Operador SQL de busca parcial                              | Filtros de `account_id` e `campaign_id`.                 |
+| **Índice**                    | Estrutura para acelerar consultas                          | Índices por `date`, `account_id`, `campaign_id`.         |
+| **chunks**                    | Processamento em “lotes”                                   | Importar CSV grande sem estourar memória/limites.        |
+| **streaming**                 | Envio por partes                                           | Export do CSV do filtro atual.                           |
+| **Δ / Δ%**                    | Diferença absoluta / percentual                            | Comparação de períodos A×B.                              |
+| **`cost_micros`**             | Custo em micros (1 BRL = 1.000.000 micros)                 | Exibido só para **admin**; UI converte p/ BRL.           |
+| **BRL**                       | Real brasileiro                                            | Moeda usada na formatação.                               |
+| **datalist (autocomplete)**   | Sugestão de valores em `<input list>`                      | Autocomplete de `account_id`/`campaign_id`.              |
+| **session cookie**            | Cookie de sessão                                           | Mantém usuário autenticado.                              |
+| **.gitignore**                | Arquivos ignorados pelo Git                                | Evita versionar `metrics.csv`/`metrics.db`.              |
+| **Git LFS**                   | *Large File Storage* para Git                              | Alternativa para versionar arquivos grandes.             |
+| **venv**                      | Ambiente virtual do Python                                 | Isola dependências do projeto.                           |
+| **pip**                       | Gerenciador de pacotes Python                              | Instala libs do `requirements.txt`.                      |
