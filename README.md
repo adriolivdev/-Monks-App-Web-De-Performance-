@@ -36,7 +36,7 @@ A aplicação foi organizada em **3 camadas principais**, separando responsabili
 - **Dados (Camada de Persistência):**  
   Utiliza **arquivos CSV** como fonte de dados inicial:  
   - `users.csv` → armazena usuários e papéis (admin ou user).  
-  - `performance.csv` → contém as métricas de performance das contas da agência.  
+  - `metrics.csv` → contém as métricas de performance das contas da agência.  
   - Esses arquivos podem futuramente ser substituídos por um banco de dados (ex.: PostgreSQL).  
 
 ---
