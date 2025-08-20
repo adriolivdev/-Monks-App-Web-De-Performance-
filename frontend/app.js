@@ -1,10 +1,9 @@
 // frontend/app.js
 // ============================================================================
-// SPA leve em JS vanilla. Responsivo, com loading overlay, toasts,
-// atalhos de período, autocomplete via datalist e totais no rodapé.
+// Mantém login, filtros, tabela, import/export, responsividade, toasts/loading.
+// Novo: comparação de períodos (A x B) com Δ absoluto e Δ%.
 // ============================================================================
 
-// -------------------- Elements --------------------
 const loginView  = document.getElementById("login-view");
 const appView    = document.getElementById("app-view");
 const loginForm  = document.getElementById("login-form");
@@ -42,12 +41,18 @@ const campaignsDL = document.getElementById("campaigns");
 const overlay = document.getElementById("loading-overlay");
 const toastEl = document.getElementById("toast");
 
-// -------------------- State --------------------
+// NOVO: elementos de comparação
+const dateFromA = document.getElementById("date-from-a");
+const dateToA   = document.getElementById("date-to-a");
+const dateFromB = document.getElementById("date-from-b");
+const dateToB   = document.getElementById("date-to-b");
+const compareBtn = document.getElementById("compare-btn");
+const compareResult = document.getElementById("compare-result");
+
 let currentSort = { by: null, dir: "asc" };
 let pagination  = { page: 1, page_size: 50, total: 0 };
 let dateBounds  = { min: null, max: null };
 
-// -------------------- Utils --------------------
 function show(view){ if(view==="login"){ loginView.classList.remove("hidden"); appView.classList.add("hidden"); } else { loginView.classList.add("hidden"); appView.classList.remove("hidden"); } }
 function fmtISO(d){ return d.toISOString().slice(0,10); }
 function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
@@ -74,7 +79,6 @@ async function api(path, opts = {}) {
     headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
     ...opts
   });
-
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try { const j = await res.json(); if (j && j.error) msg = j.error; }
@@ -84,15 +88,14 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
-// -------------------- Bootstrap --------------------
 async function preloadDates(){
   try {
     const res = await fetch("/api/date-range", { credentials:"include" });
-    if(!res.ok) return;
+    if (!res.ok) return;
     const { min, max } = await res.json();
     dateBounds.min = min || null; dateBounds.max = max || null;
-    if(min) dateFrom.min=min, dateTo.min=min;
-    if(max) dateFrom.max=max, dateTo.max=max;
+    if(min) dateFrom.min=min, dateTo.min=min, dateFromA.min=min, dateToA.min=min, dateFromB.min=min, dateToB.min=min;
+    if(max) dateFrom.max=max, dateTo.max=max, dateFromA.max=max, dateToA.max=max, dateFromB.max=max, dateToB.max=max;
     if(min) dateFrom.value=min;
     if(max) dateTo.value=max;
   } catch {}
@@ -114,7 +117,7 @@ async function init(){
 }
 init();
 
-// -------------------- Auth --------------------
+// ---------- Auth ----------
 loginForm.addEventListener("submit", async (e)=>{
   e.preventDefault(); loginError.textContent = "";
   setLoading(true);
@@ -141,7 +144,7 @@ logoutBtn.addEventListener("click", async ()=>{
   finally { setLoading(false); }
 });
 
-// -------------------- Filtros / UX --------------------
+// ---------- Filtros ----------
 applyBtn.addEventListener("click", ()=>{ pagination.page=1; loadTable(); });
 clearBtn.addEventListener("click", ()=>{
   dateFrom.value=""; dateTo.value="";
@@ -151,7 +154,6 @@ clearBtn.addEventListener("click", ()=>{
   loadTable();
 });
 
-// chips (atalhos de data)
 chips.forEach(btn=>{
   btn.addEventListener("click", ()=>{
     const kind = btn.dataset.range;
@@ -171,7 +173,7 @@ chips.forEach(btn=>{
   });
 });
 
-// autocomplete com datalist
+// autocomplete (datalist)
 async function fillDatalist(field, q, targetDL){
   const params = new URLSearchParams({ field, q, limit:"50" }).toString();
   const res = await fetch(`/api/options?${params}`, { credentials:"include" });
@@ -194,14 +196,14 @@ document.addEventListener("keydown",(e)=>{
   }
 });
 
-// -------------------- Paginação --------------------
+// ---------- Paginação ----------
 prevBtn.addEventListener("click", ()=>{ if(pagination.page>1){ pagination.page--; loadTable(); }});
 nextBtn.addEventListener("click", ()=>{
   const last=Math.max(1, Math.ceil(pagination.total / pagination.page_size));
   if(pagination.page<last){ pagination.page++; loadTable(); }
 });
 
-// -------------------- Export / Import --------------------
+// ---------- Export / Import ----------
 exportLink.addEventListener("click",(e)=>{
   e.preventDefault();
   const params=buildParams();
@@ -224,7 +226,7 @@ fileInput?.addEventListener("change", async (e)=>{
   finally{ e.target.value=""; setLoading(false); }
 });
 
-// -------------------- Data Loading --------------------
+// ---------- Data Loading ----------
 function buildParams(){
   const params=new URLSearchParams();
   if(dateFrom.value) params.set("date_from", dateFrom.value);
@@ -312,4 +314,92 @@ function renderTable(rows, totals){
     trFoot.appendChild(td);
   });
   tfoot.appendChild(trFoot);
+}
+
+// ---------- NOVO: comparação de períodos ----------
+compareBtn.addEventListener("click", async ()=>{
+  // Se A/B estiverem vazios, usa B = filtro atual e A = período anterior de mesma duração
+  if(!dateFromB.value || !dateToB.value){
+    dateFromB.value = dateFrom.value || dateBounds.min || "";
+    dateToB.value   = dateTo.value   || dateBounds.max || "";
+  }
+  if(!dateFromA.value || !dateToA.value){
+    const bFrom = new Date(dateFromB.value);
+    const bTo   = new Date(dateToB.value);
+    if(!isNaN(bFrom) && !isNaN(bTo)){
+      const days = Math.max(0, Math.round((bTo - bFrom)/(1000*60*60*24)));
+      const aTo  = new Date(bFrom); aTo.setDate(aTo.getDate()-1);
+      const aFrom= new Date(aTo);   aFrom.setDate(aFrom.getDate()-days);
+      dateFromA.value = fmtISO(aFrom);
+      dateToA.value   = fmtISO(aTo);
+    }
+  }
+
+  const qs = new URLSearchParams({
+    date_from_a: dateFromA.value || "",
+    date_to_a:   dateToA.value   || "",
+    date_from_b: dateFromB.value || "",
+    date_to_b:   dateToB.value   || "",
+  });
+  if(accountIdEl.value)  qs.set("account_id",  accountIdEl.value.trim());
+  if(campaignIdEl.value) qs.set("campaign_id", campaignIdEl.value.trim());
+
+  setLoading(true);
+  try{
+    const res = await api(`/api/compare?${qs.toString()}`);
+    renderCompare(res);
+  } catch(err){
+    compareResult.innerHTML = `<div class="error">Erro ao comparar: ${err.message||err}</div>`;
+  } finally { setLoading(false); }
+});
+
+function renderCompare({ total_a, total_b, diff_abs, diff_pct }){
+  // Decide as métricas a mostrar pela presença nas chaves (RBAC)
+  const keys = ["clicks","conversions","impressions","interactions"]
+    .concat(("cost_micros" in (total_a||{})) ? ["cost_micros"] : []);
+
+  const fmtNum = n => new Intl.NumberFormat("pt-BR",{ maximumFractionDigits: 2 }).format(n||0);
+  const fmtPct = n => (n===null || n===undefined) ? "—" :
+    `${(n>=0?"+":"")}${new Intl.NumberFormat("pt-BR",{ maximumFractionDigits:1 }).format(n)}%`;
+  const fmtBRL = micros => {
+    const brl = (Number(micros||0))/1_000_000;
+    return new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(brl);
+  };
+
+  let html = `
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Métrica</th>
+            <th>Período A</th>
+            <th>Período B</th>
+            <th>Δ</th>
+            <th>Δ%</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+  keys.forEach(k=>{
+    const a = total_a?.[k] ?? 0;
+    const b = total_b?.[k] ?? 0;
+    const d = diff_abs?.[k] ?? 0;
+    const p = diff_pct?.[k];
+
+    const render = (k==="cost_micros") ? fmtBRL : fmtNum;
+    const renderD = (k==="cost_micros") ? fmtBRL : fmtNum;
+
+    const classDelta = d>0 ? 'pos' : (d<0 ? 'neg' : '');
+    html += `
+      <tr>
+        <td>${k}</td>
+        <td>${render(a)}</td>
+        <td>${render(b)}</td>
+        <td class="${classDelta}">${d>=0?"+":""}${renderD(d)}</td>
+        <td class="${classDelta}">${fmtPct(p)}</td>
+      </tr>
+    `;
+  });
+  html += `</tbody></table></div>`;
+  compareResult.innerHTML = html;
 }

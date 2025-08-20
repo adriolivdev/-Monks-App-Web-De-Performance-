@@ -9,25 +9,18 @@
 </head>
 <body>
   <main class="container">
-    <!-- ========================= LOGIN ========================= -->
+    <!-- LOGIN -->
     <section id="login-view" class="card">
       <h1 class="brand">Portal de Performance</h1>
       <p class="muted">Acesse com seu e-mail (username) e senha</p>
-
       <form id="login-form" class="form">
         <label for="email">E-mail</label>
         <input id="email" type="text" placeholder="user1" required />
-
         <label for="password">Senha</label>
         <input id="password" type="password" placeholder="••••••••" required />
-
-        <div class="row gap">
-          <button type="submit" class="btn primary">Entrar</button>
-        </div>
-
+        <div class="row gap"><button type="submit" class="btn primary">Entrar</button></div>
         <div id="login-error" class="error" role="alert"></div>
       </form>
-
       <details class="muted">
         <summary>Credenciais de exemplo</summary>
         <pre>user1 / oeiIuhn56146 (admin)
@@ -35,7 +28,7 @@ user2 / 908ij0fff (user)</pre>
       </details>
     </section>
 
-    <!-- ========================== APP ========================= -->
+    <!-- APP -->
     <section id="app-view" class="card hidden">
       <header class="toolbar">
         <div class="toolbar-left">
@@ -45,21 +38,18 @@ user2 / 908ij0fff (user)</pre>
             <strong>Papel:</strong> <span id="me-role"></span>
           </div>
         </div>
-
         <div class="toolbar-right">
           <label class="upload btn linklike">
             <input id="csv-file" type="file" accept=".csv" hidden />
             Importar CSV
           </label>
           <a id="export-csv" class="btn linklike" href="#" download>Exportar CSV</a>
-          <a class="btn linklike" href="/api/example-csv">CSV de exemplo</a>
           <button id="logout" class="btn danger outline">Sair</button>
         </div>
       </header>
 
-      <!-- ====== FILTROS ====== -->
+      <!-- FILTROS -->
       <section class="filters">
-        <!-- atalhos de período -->
         <div class="chipbar" aria-label="Atalhos de período">
           <button class="chip" data-range="all">Tudo</button>
           <button class="chip" data-range="today">Hoje</button>
@@ -69,7 +59,6 @@ user2 / 908ij0fff (user)</pre>
           <button class="chip" data-range="lastMonth">Mês passado</button>
         </div>
 
-        <!-- grid de filtros principais -->
         <div class="grid g-4">
           <div class="field">
             <label for="date-from">Data inicial</label>
@@ -85,7 +74,6 @@ user2 / 908ij0fff (user)</pre>
           </div>
         </div>
 
-        <!-- filtros avançados (colapsáveis no mobile) -->
         <details class="advanced" open>
           <summary>Filtros avançados</summary>
           <div class="grid g-4">
@@ -108,7 +96,37 @@ user2 / 908ij0fff (user)</pre>
         </div>
       </section>
 
-      <!-- ====== TABELA (wrap com scroll horizontal) ====== -->
+      <!-- NOVO: COMPARAÇÃO DE PERÍODOS -->
+      <section class="filters">
+        <details class="advanced" open>
+          <summary>Comparar períodos</summary>
+          <div class="grid g-4">
+            <div class="field">
+              <label for="date-from-a">Período A — Data inicial</label>
+              <input type="date" id="date-from-a" />
+            </div>
+            <div class="field">
+              <label for="date-to-a">Período A — Data final</label>
+              <input type="date" id="date-to-a" />
+            </div>
+            <div class="field">
+              <label for="date-from-b">Período B — Data inicial</label>
+              <input type="date" id="date-from-b" />
+            </div>
+            <div class="field">
+              <label for="date-to-b">Período B — Data final</label>
+              <input type="date" id="date-to-b" />
+            </div>
+          </div>
+          <div class="row gap" style="margin-top:8px;">
+            <button id="compare-btn" class="btn">Comparar</button>
+          </div>
+
+          <div id="compare-result" class="compare-result" style="margin-top:10px;"></div>
+        </details>
+      </section>
+
+      <!-- TABELA -->
       <section class="table-wrap">
         <table id="data-table" class="table">
           <thead id="table-head"></thead>
@@ -117,7 +135,7 @@ user2 / 908ij0fff (user)</pre>
         </table>
       </section>
 
-      <!-- ====== PAGINAÇÃO ====== -->
+      <!-- PAGINAÇÃO -->
       <footer class="pager">
         <button id="prev-page" class="btn">Anterior</button>
         <span id="page-info" class="muted" aria-live="polite"></span>
@@ -126,7 +144,7 @@ user2 / 908ij0fff (user)</pre>
     </section>
   </main>
 
-  <!-- overlay de loading e área de toast -->
+  <!-- loading & toast -->
   <div id="loading-overlay" class="loading hidden" aria-hidden="true">
     <div class="spinner" aria-label="Carregando"></div>
   </div>

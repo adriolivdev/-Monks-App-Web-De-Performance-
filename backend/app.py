@@ -1,19 +1,7 @@
 # backend/app.py
 # -----------------------------------------------------------------------------
-# API Flask
-#
-# Rotas:
-# - /api/login, /api/logout, /api/me               → sessão/usuário
-# - /api/data                                      → dados paginados + totais (filtros/ordenação)
-# - /api/export                                    → exportação CSV do filtro atual
-# - /api/date-range                                → bounds de data (min/max)
-# - /api/options?field=account_id|campaign_id&q=   → autocomplete
-# - /api/import (POST, admin)                      → upload de CSV e reimport
-# - / (static)                                     → entrega o frontend
-#
-# Observações:
-# - RBAC simples via session: role=admin habilita cost_micros
-# - Em produção, rodar com waitress/uwsgi/gunicorn e SECRET_KEY via ambiente.
+# API Flask: login/logout/me, dados paginados + totais, export CSV, date-range,
+# autocomplete e import CSV. Novo: /api/compare para comparação de períodos.
 # -----------------------------------------------------------------------------
 
 from flask import Flask, request, jsonify, session, send_from_directory, Response
@@ -33,6 +21,7 @@ from data_loader import (
     import_csv_file,
     METRICS_CSV,
     get_distinct_values,
+    compute_totals,  # <-- novo
 )
 
 app = Flask(
@@ -60,30 +49,19 @@ def login():
     session["user"] = {"username": email_or_user, "role": user["role"]}
     return jsonify({"ok": True, "user": session["user"]}), 200
 
-
 @app.route("/api/me", methods=["GET"])
 def me():
     return jsonify({"user": get_current_user(session)}), 200
-
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
     logout_user(session)
     return jsonify({"ok": True}), 200
 
-
 # ---------------- DATA ----------------
 
 @app.route("/api/data", methods=["GET"])
 def data():
-    """
-    Retorna dados paginados + totais do filtro atual.
-    Query params aceitos:
-      - date_from, date_to (YYYY-MM-DD)
-      - account_id, campaign_id (contém)
-      - sort_by, sort_dir (asc|desc)
-      - page, page_size
-    """
     user = get_current_user(session)
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
@@ -123,13 +101,8 @@ def data():
         import traceback; traceback.print_exc()
         return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
 
-
 @app.route("/api/export", methods=["GET"])
 def export_csv():
-    """
-    Exporta o filtro atual em CSV (todas as linhas, sem paginação).
-    Respeita RBAC (cost_micros apenas para admin).
-    """
     user = get_current_user(session)
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
@@ -150,22 +123,12 @@ def export_csv():
     return Response(gen, mimetype="text/csv; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
-
 @app.route("/api/date-range", methods=["GET"])
 def date_range():
-    """
-    Retorna {min, max} de date na tabela. Útil para preencher inputs do front.
-    """
     return jsonify(get_date_bounds()), 200
-
 
 @app.route("/api/options", methods=["GET"])
 def options():
-    """
-    Autocomplete de valores distintos:
-      /api/options?field=account_id&q=8181&limit=20
-      /api/options?field=campaign_id&q=6320&limit=20
-    """
     user = get_current_user(session)
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
@@ -176,13 +139,57 @@ def options():
     vals = get_distinct_values(field, q, limit)
     return jsonify({"values": vals}), 200
 
+# ---- NOVO: COMPARAÇÃO DE PERÍODOS ----
+@app.route("/api/compare", methods=["GET"])
+def compare():
+    """
+    Compara dois períodos (A x B) e retorna:
+      - total_a, total_b
+      - diff_abs (B - A)
+      - diff_pct (variação % em relação a A)
+    Respeita account_id/campaign_id e RBAC (cost_micros só para admin).
+    """
+    user = get_current_user(session)
+    if not user:
+        return jsonify({"error": "Não autenticado"}), 401
+
+    include_cost = (user.get("role") == "admin")
+
+    a_from = request.args.get("date_from_a")
+    a_to   = request.args.get("date_to_a")
+    b_from = request.args.get("date_from_b")
+    b_to   = request.args.get("date_to_b")
+    account_id  = request.args.get("account_id")
+    campaign_id = request.args.get("campaign_id")
+
+    try:
+        total_a = compute_totals(a_from, a_to, account_id, campaign_id, include_cost)
+        total_b = compute_totals(b_from, b_to, account_id, campaign_id, include_cost)
+
+        diff_abs = {}
+        diff_pct = {}
+        keys = total_a.keys()
+        for k in keys:
+            da = float(total_a.get(k, 0.0))
+            db = float(total_b.get(k, 0.0))
+            diff_abs[k] = db - da
+            diff_pct[k] = None if da == 0 else ((db - da) / da) * 100.0
+
+        return jsonify({
+            "total_a": total_a,
+            "total_b": total_b,
+            "diff_abs": diff_abs,
+            "diff_pct": diff_pct
+        }), 200
+
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"error": f"{type(e).__name__}: {e}"}), 500
+
+# ---------------- IMPORT ----------------
 
 @app.route("/api/import", methods=["POST"])
 def import_metrics():
-    """
-    Upload de CSV (apenas admin). Salva temporário, importa para o DB,
-    e substitui o metrics.csv “oficial”.
-    """
     user = get_current_user(session)
     if not user:
         return jsonify({"error": "Não autenticado"}), 401
@@ -207,10 +214,9 @@ def import_metrics():
     except Exception as e:
         if os.path.exists(temp_path):
             os.remove(temp_path)
-        return jsonify({"error": f"Falha ao importar CSV: {e}"}), 500
+        return jsonify({"error": f"Falha ao importar CSV: {e}"}), 400
 
     return jsonify({"ok": True, "message": f"Importação concluída ({imported_rows} linhas)."}), 200
-
 
 # ---------------- FRONT ----------------
 
@@ -218,7 +224,5 @@ def import_metrics():
 def index():
     return send_from_directory(app.static_folder, "index.html")
 
-
 if __name__ == "__main__":
-    # Em produção, prefira waitress/uwsgi/gunicorn (ex.: waitress-serve backend.app:app)
     app.run(host="0.0.0.0", port=8000, debug=False)

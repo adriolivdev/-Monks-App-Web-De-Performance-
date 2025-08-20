@@ -137,3 +137,8 @@ tfoot td{
 
 /* utility */
 pre{ background:#0f1728; padding:12px; border-radius:10px; overflow:auto; }
+
+/* comparação*/
+
+.compare-result .pos { color: #34d399; font-weight: 600; } /* verde */
+.compare-result .neg { color: #f87171; font-weight: 600; } /* vermelho */
