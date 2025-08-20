@@ -11,10 +11,54 @@ Ele permite:
 - Ordenar por qualquer coluna  
 - Exibir a coluna `cost_micros` apenas para usuários com papel **admin**  
 
-A arquitetura foi pensada em **3 camadas**:  
-- **Frontend:** HTML, CSS e JavaScript puro (sem framework pra agilizar o MVP, mas posso passar pra React, Vue.js ou Angular).  
-- **Backend (API):** Python (Flask), aplicando regras de negócio e segurança.  
-- **Dados:** arquivos CSV (`users.csv` e `metrics.csv`).  
+## 🏗️ Arquitetura  
+
+A aplicação foi organizada em **3 camadas principais**, separando responsabilidades de forma clara:  
+
+- **Frontend (Camada de Apresentação):**  
+  Construído em **HTML, CSS e JavaScript puro**, garantindo simplicidade no MVP.  
+  - Exibe os dados em formato de tabela.  
+  - Permite filtros por data e ordenação de colunas.  
+  - Controla a experiência do usuário (UX).  
+  - Futuramente pode ser migrado para um framework moderno como **React, Vue.js ou Angular**.  
+
+- **Backend (Camada de Lógica / API):**  
+  Desenvolvido em **Python (Flask)**.  
+  - Fornece rotas para login e acesso aos dados.  
+  - Aplica regras de negócio (ex.: esconder a coluna `cost_micros` para usuários não-admin).  
+  - Garante segurança com autenticação via email e senha.  
+  - Organização modular:  
+    - `app.py` → ponto de entrada da API.  
+    - `auth.py` → autenticação e controle de acesso.  
+    - `data_loader.py` → carregamento e tratamento dos CSVs.  
+    - `utils.py` → funções auxiliares.  
+
+- **Dados (Camada de Persistência):**  
+  Utiliza **arquivos CSV** como fonte de dados inicial:  
+  - `users.csv` → armazena usuários e papéis (admin ou user).  
+  - `performance.csv` → contém as métricas de performance das contas da agência.  
+  - Esses arquivos podem futuramente ser substituídos por um banco de dados (ex.: PostgreSQL).  
+
+---
+
+### 🔎 Diagrama da Arquitetura  
+
+### 🔗 Diagrama Simplificado da Arquitetura  
+
+```plaintext
+Usuário
+   │
+   ▼
+Frontend (HTML, CSS, JS)
+   │  solicita dados
+   ▼
+Backend (Flask API)
+   │  regras de negócio:
+   │   - login (email/senha)
+   │   - admin vê "cost_micros"
+   │   - user não vê
+   ▼
+Arquivos CSV (users.csv / metrics.csv)
 
 ---
 
@@ -43,26 +87,37 @@ A arquitetura foi pensada em **3 camadas**:
 ---
 
 ## 📂 Estrutura do projeto
-marketing_case/
-│
+.monks/
+.monks/
 
-├── app.py # API Flask
+│── backend/
 
-├── data/
+│   ├── app.py          # API principal em Flask
 
-│ ├── users.csv # Usuários (email, senha, role)
+│   ├── auth.py         # lógica de login
 
-│ └── performance.csv # Dados de performance
+│   ├── data_loader.py  # leitura dos CSV
 
-├── static/
+│   ├── utils.py        # funções auxiliares
 
-│ ├── index.html # Frontend (login + tabela)
+│── frontend/
 
-│ ├── app.js # Lógica do frontend
+│   ├── index.html      # página inicial
 
-│ └── styles.css # Estilos
+│   ├── app.js       # lógica de frontend
 
-└── README.md
+│   ├── style.css       # estilos
+
+│── data/
+
+│   ├── users.csv       # usuários do sistema
+
+│   ├── performance.csv # métricas da agência
+
+│── requirements.txt
+
+│── README.md
+
 
 ---
 ## 🔧 Como rodar localmente
